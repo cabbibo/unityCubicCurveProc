@@ -6,13 +6,13 @@ using UnityEditor;
 using Unity.Mathematics;
 
 
-[CustomEditor(typeof(CubicProcMeshDirectionsMatter))]
-public class CubicProcMeshDirectionsMatterEditor : Editor
+[CustomEditor(typeof(Curve))]
+public class CurveEditor : Editor
 {
 
             bool hasChanged = false;
 
-    CubicProcMeshDirectionsMatter curve;
+    Curve curve;
      
     bool rightClick = false;
     Vector2 clickPos;
@@ -25,7 +25,7 @@ public class CubicProcMeshDirectionsMatterEditor : Editor
     
     void OnEnable(){
         
-        curve = (CubicProcMeshDirectionsMatter)target;
+        curve = (Curve)target;
 
         label = new GUIStyle();
         label.fontSize = (int)(15 * curve.interfaceScale+1);;

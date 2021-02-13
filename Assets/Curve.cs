@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -8,7 +8,7 @@ using Unity.Mathematics;
 
 [ExecuteInEditMode]
 [RequireComponent(typeof(AudioSource))]
-public class CubicProcMeshDirectionsMatter : MonoBehaviour
+public class Curve : MonoBehaviour
 {
 
     public bool closed;
@@ -81,8 +81,14 @@ public class CubicProcMeshDirectionsMatter : MonoBehaviour
 
      public AudioClip addNodeClip;
      public AudioClip deleteNodeClip;
+     public AudioClip errorClip;
 
      private AudioSource audioSource;
+
+
+         
+    private float3 p; private float3 d; private float3 t; private float w; 
+    private float3 p2; private float3 d2; private float3 t2; private float w2; 
 
     // Start is called before the first frame update
     void OnEnable(){
@@ -100,6 +106,8 @@ public class CubicProcMeshDirectionsMatter : MonoBehaviour
     }
     public void DeletePoint(){
 
+      if( positions.Count > 0 ){
+
       positions.Remove(positions[selectedPoint]);
       rotations.Remove(rotations[selectedPoint]);
       powers.Remove(powers[selectedPoint]);
@@ -110,6 +118,9 @@ public class CubicProcMeshDirectionsMatter : MonoBehaviour
 
      
         playClip( deleteNodeClip );
+      }else{
+        playClip( errorClip );
+      }
 
     }
     
@@ -123,7 +134,7 @@ public class CubicProcMeshDirectionsMatter : MonoBehaviour
         // see if this is where we should be creating the positions
         if( v > (float)i/((float)positions.Count-1)  && v <= ((float)i+1)/((float)positions.Count-1) ){
 
-          float3 p; float3 d; float3 t; float w;
+
           GetCubicInformation( v , out p , out d, out t , out w);
 
     
@@ -365,9 +376,7 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
     List<float3> evenTangents     = new List<float3>();
     List<float>  evenWidths       = new List<float>();
 
-    
-    float3 p; float3 d; float3 t; float w; 
-    float3 p2; float3 d2; float3 t2; float w2; 
+
   
     GetCubicInformation(0 , out p , out d , out t , out w );
         
@@ -491,8 +500,136 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
 
 
     }
- 
 
+
+    /*
+      API
+    */
+
+
+    // normalized dist along
+    public float getEvenDistAlong( float v ){
+      if( v >= 1){ v = 1; }
+      if( v <= 0){ v = 0;}
+      float segment = v * (bakedPoints.Length-1);
+      float min = Mathf.Floor(segment);
+      float max = Mathf.Max(segment);
+
+       if( segment %1 == 0 || min == max){
+        return bakedDists[(int)segment];
+      }else{
+        return lerp( bakedDists[(int)min] ,  bakedDists[(int)max] , (segment-min));
+      }
+
+    }
+
+
+    public Vector3 GetPositionFromValueAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v) , out p , out d , out t , out w );
+        return p;
+    }
+
+    public Vector3 GetPositionFromLengthAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out p , out d , out t , out w );
+        return p;
+    }
+
+
+
+    public Vector3 GetRightFromValueAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v) , out p , out d , out t , out w );
+        return t;
+    }
+
+    public Vector3 GetRightFromLengthAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out p , out d , out t , out w );
+        return t;
+    }
+
+
+  public Vector3 GetForwardFromValueAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v) , out p , out d , out t , out w );
+        return d;
+    }
+
+    public Vector3 GetForwardFromLengthAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out p , out d , out t , out w );
+        return d;
+    }
+
+
+    
+    public Vector3 GetUpFromValueAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v) , out p , out d , out t , out w );
+        return -cross( d,t);
+    }
+
+    public Vector3 GetUpFromLengthAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out p , out d , out t , out w );
+        return -cross( d,t);
+    }
+
+
+
+    public Quaternion GetRotationFromValueAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v) , out p , out d , out t , out w );
+        return Quaternion.LookRotation( d , -cross( d,t));
+    }
+
+    public Quaternion GetRotationFromLengthAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out p , out d , out t , out w );
+        return Quaternion.LookRotation( d , -cross( d,t));
+    }
+
+    public float GetWidthFromValueAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v) , out p , out d , out t , out w );
+        return w;
+    }
+
+    public float GetWidthFromLengthAlongCurve( float v ){
+        GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out p , out d , out t , out w );
+        return w;
+    }
+
+    public void SetTransformFromValueAlongCurve( float v , Transform transform){
+        GetCubicInformation( getEvenDistAlong(v) , out p , out d , out t , out w );
+        transform.position = p;
+        transform.rotation = Quaternion.LookRotation( d , -cross( d,t));
+    }
+
+
+    public void SetTransformFromLengthAlongCurve( float v , Transform transform){
+        GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out p , out d , out t , out w );
+        transform.position = p;
+        transform.rotation = Quaternion.LookRotation( d , -cross( d,t));
+    }
+
+    public Vector3 GetOffsetPositionFromValueAlongCurve( float v , float x , float y ){
+       GetCubicInformation( getEvenDistAlong(v) , out p , out d , out t , out w );
+       return p + t * x -cross( d,t)*y;
+    }
+
+
+    public Vector3 GetOffsetPositionFromLengthAlongCurve( float v , float x , float y ){
+       GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out p , out d , out t , out w );
+       return p + t * x -cross( d,t)*y;
+    }
+
+    public float GetCurveValueFromLengthAlongCurve( float v ){
+      return  getEvenDistAlong(v/totalCurveLength);
+    }
+
+    public float GetCurveValueFromValueAlongCurve( float v ){
+      return  getEvenDistAlong(v);
+    }
+
+    public float GetCurveLengthFromLengthAlongCurve( float v ){
+      return  getEvenDistAlong(v/totalCurveLength)*totalCurveLength;
+    }
+
+    public float GetCurveLengthFromValueAlongCurve( float v ){
+      return  getEvenDistAlong(v)*totalCurveLength;
+    }
 
 
 }
