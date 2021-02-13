@@ -6,6 +6,9 @@ using UnityEditor;
 using Unity.Mathematics;
 
 
+namespace MagicCurve{
+
+
 [CustomEditor(typeof(Curve))]
 public class CurveEditor : Editor
 {
@@ -632,4 +635,5 @@ Movement
     }
 
    
+}
 }

@@ -6,6 +6,10 @@ using UnityEngine.Rendering;
 using Unity.Mathematics;
 
 
+namespace MagicCurve{
+
+
+  
 [ExecuteInEditMode]
 [RequireComponent(typeof(AudioSource))]
 public class Curve : MonoBehaviour
@@ -633,7 +637,7 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
 
 
 }
-
+}
 
 
 
