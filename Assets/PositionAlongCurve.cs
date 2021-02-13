@@ -14,10 +14,5 @@ public class PositionAlongCurve : MonoBehaviour
         
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-        transform.position = curve.GetPositionAlongPath( curve.curveStart );
-    }
+  
 }

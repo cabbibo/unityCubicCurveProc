@@ -2,149 +2,248 @@
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
+
+        _Size ("Size", Float) = 0.1
+        _AlphaCuttoff ("AlphaCuttoff", Float) = 0.1
+        _SpriteSize("SpriteSize",int) = 1
+        _MainTex ("tex" , 2D )  = "white" {}
+        _BumpMap ("bump map" , 2D )  = "white" {}
+        _StartingColor("_StartingColor", Color ) = (1,1,1,1)
+        _EndingColor("_EndingColor", Color ) = (1,1,1,1)
+        _Metallic("_Metallic" , float )  = 0
+        _Smoothness("_Smoothness" , float )  = 0
+    
     }
     SubShader
     {
+
+        Cull Off
         Tags { "RenderType"="Opaque" }
-        LOD 100
+        LOD 200
 
-
-Cull Off
-        Pass
-        {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            // make fog work
-            #pragma multi_compile_fog
+        CGPROGRAM
+        // Physically based Standard lighting model, making it so we add shadows
+        #pragma surface surf Standard   vertex:vert addshadow
+        #pragma shader_feature WORLD_NORMAL
+        // Use shader model 4.5 to make sure we have access to compute buffer
+        #pragma target 4.5
 
             #include "UnityCG.cginc"
+       
+    
+      
 
-            struct appdata
-            {
+            // input info
+            struct appdata {
                 float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
+                float3 normal : NORMAL;
+                float4 tangent : TANGENT;
+                float4 texcoord : TEXCOORD0;
+                uint id : SV_VertexID;
             };
 
-            struct v2f
-            {
-                float2 uv : TEXCOORD0;
-                float4 vertex : SV_POSITION;
-            };
+
+            // info passed to surface shader
+            struct Input{
+                float2 uv_BumpMap;
+                float2 uv_MainTex;
+                float2 uv_Band;
+            };   
 
             sampler2D _MainTex;
-            float4 _MainTex_ST;
+            sampler2D _BumpMap;
+ 
+            #if defined(SHADER_API_D3D11) || defined(SHADER_API_PSSL) || defined(SHADER_API_METAL) || defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES3) || defined(SHADER_API_VULKAN) || defined(SHADER_API_SWITCH) // D3D11, D3D12, XB1, PS4, iOS, macOS, tvOS, glcore, gles3, webgl2.0, Switch
+                StructuredBuffer<float4x4> _PointBuffer;
+                StructuredBuffer<float3> _PowerBuffer;
+            #endif
 
-            StructuredBuffer<float4x4> _PointBuffer;
-            int _TotalCurvePoints;
-            int _Resolution;
-            float _CurveWidth;
-            float _CurveLength;
-            float _CurveStart;
-            float _VelocityImportance;
-
-float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
-
-  float s  = 1. - t;
-
-  float3 v1 = c0 * ( s * s * s );
-  float3 v2 = 3. * c1 * ( s * s ) * t;
-  float3 v3 = 3. * c2 * s * ( t * t );
-  float3 v4 = c3 * ( t * t * t );
-
-  float3 value = v1 + v2 + v3 + v4;
-
-  return value;
-
-}
+            #include "CurveInfo.cginc"
 
 
-
-
-
- void GetCubicInformation( float val , out float3 position , out float3 direction , out float3 tangent ){
-
-
-  float3 p0 = 0;
-  float3 v0 = 0;
-  float3 p1 = 0;
-  float3 v1 = 0;
-
-  float3 p2 = float3( 0. , 0. , 0. );
-
-  float vPP = float(_TotalCurvePoints);
-
-  float base = val * (vPP-1);
-
-  int baseUp   = int(floor( base ));
-  int baseDown = int(ceil( base ));
-
-
-// TOD MAKE UNIFORM
-  float3 up = float3(0,1,0);
-
-
-
-  if( baseUp == baseDown  || (base % 1) == 0){
-
-    float4x4 pointMatrix = _PointBuffer[base];
-
-    position = mul( pointMatrix , float4(0,0,0,1)).xyz;
-    direction = normalize(mul( pointMatrix , float4(0,0,1,0)).xyz);
-
-    
-    tangent = normalize(mul( pointMatrix , float4(1,0,0,0)).xyz);
-    
-  }else{
-    float amount = base - float(baseUp);
-    float4x4 pointMatrixUp = _PointBuffer[baseUp];
-    float4x4 pointMatrixDown = _PointBuffer[baseDown];
-   p0 = mul( pointMatrixUp , float4(0,0,0,1)).xyz;
-   p1 = mul( pointMatrixDown , float4(0,0,0,1)).xyz;
-
-   
-   v0 = 20*mul( pointMatrixUp , float4(0,0,1,0)).xyz;
-   v1 = 20*mul( pointMatrixDown , float4(0,0,1,0)).xyz;
-
-
-   
-
-
-    // Todo : make the /3 a uniform also
-    float3 c0 = p0;
-    float3 c1 = p0 + v0/(3./_VelocityImportance);
-    float3 c2 = p1 - v1/(3./_VelocityImportance);
-    float3 c3 = p1;
-
-    float3 pos = cubicCurve( amount , c0 , c1 , c2 , c3 );
-
-    float3 upPos = cubicCurve( amount  + .001 , c0 , c1 , c2 , c3 );
-
-    position = pos;
-    direction = normalize(upPos - pos);   
-
-    
-    tangent = lerp( normalize(mul( pointMatrixUp , float4(1,0,0,0)).xyz) , normalize(mul( pointMatrixDown , float4(1,0,0,0)).xyz) , amount);
-  
-
-
-  }
-
-
-}
-
-
-
-            v2f vert (uint vid : SV_VertexID)
+            void vert (inout appdata v,out Input o) 
             {
-                v2f o;
+             
+
+                int vid = v.id;
+                
+                UNITY_INITIALIZE_OUTPUT(Input,o);
+
+                #if defined(SHADER_API_D3D11) || defined(SHADER_API_PSSL) || defined(SHADER_API_METAL) || defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES3) || defined(SHADER_API_VULKAN) || defined(SHADER_API_SWITCH) // D3D11, D3D12, XB1, PS4, iOS, macOS, tvOS, glcore, gles3, webgl2.0, Switch
 
                 int quadID = vid /6;
+
+                int rowID = quadID / _ResolutionX;
+                int colID = quadID % _ResolutionX;
                 int inQuadID = vid % 6;
 
-                float val = float(quadID) / float(_Resolution);
-                float valUp = float(quadID+1) / float(_Resolution);
+                float val = float(rowID) / float(_Resolution);
+                float valUp = float(rowID+1) / float(_Resolution);
+
+                float col = float(colID) / float(_ResolutionX);
+                float colUp = float(colID+1) / float(_ResolutionX);
+
+
+                val *= _CurveLength;
+                val += _CurveStart;
+
+                
+                valUp *= _CurveLength;
+                valUp += _CurveStart;
+
+                float3 pos; float3 dir; float3 tang; float width;
+                float3 posUp; float3 dirUp; float3 tangUp; float widthUp;
+
+                GetCubicInformation( val , pos , dir , tang , width );
+                GetCubicInformation( valUp , posUp , dirUp , tangUp , widthUp);
+
+                float3 p1 = pos   + (col   -.5)* tang * _CurveWidthMultiplier * width;
+                float3 p2 = pos   + (colUp -.5)* tang * _CurveWidthMultiplier * width;
+                float3 p3 = posUp + (col   -.5)* tangUp * _CurveWidthMultiplier* widthUp;
+                float3 p4 = posUp + (colUp -.5)* tangUp * _CurveWidthMultiplier* widthUp;
+
+                float3 fNor;
+                float3 fTan;
+
+                float3 nor = normalize(cross(dir,tang));
+                float3 norUp = normalize(cross(dirUp,tangUp));
+
+                float3 fPos;
+                float2 fUV;
+
+                 if( inQuadID == 0 ){
+                    fPos = p1;
+                    fUV = float2( col,val);
+                    fNor = nor;
+                    fTan = tang;
+                }else if( inQuadID == 1 ){
+                    fPos = p2;
+                    fUV = float2( colUp,val);
+                    fNor = nor;
+                    fTan = tang;
+                }else if( inQuadID == 2 ){                         
+                    fPos = p4;
+                    fUV = float2( colUp,valUp);
+                    fNor = norUp;
+                    fTan = tangUp;
+                }else if( inQuadID == 3 ){
+                    fPos = p1;
+                    fUV = float2( col,val);
+                    fNor = nor;
+                    fTan = tang;
+                }else if( inQuadID == 4 ){
+                    fPos = p4;
+                    fUV = float2( colUp,valUp);
+                    fNor = norUp;
+                    fTan = tangUp;
+                }else{
+                    fPos = p3;
+                    fUV = float2( col,valUp);
+                    fNor = norUp;
+                    fTan = tangUp;
+                }
+
+                v.texcoord = float4( fUV, 0, 0 );
+                v.normal =  normalize(mul( unity_WorldToObject , float4( fNor ,0 )).xyz);
+                v.vertex = float4(mul( unity_WorldToObject , float4( fPos ,1 )).xyz,1);
+                v.tangent = float4(normalize(mul( unity_WorldToObject , float4( fTan ,0 )).xyz),1);
+              
+                #endif
+
+            }
+
+            float _Metallic;
+            float _Smoothness;
+
+            float4 _StartingColor;
+            float4 _EndingColor;
+            float _AlphaCuttoff;
+          
+        
+            void surf (Input IN, inout SurfaceOutputStandard o)
+            {
+                // Albedo comes from a texture tinted by color
+
+                float4 c = tex2D(_MainTex , IN.uv_MainTex );
+                
+                o.Albedo = c.xyz;//*  lerp(_StartingColor, _EndingColor, IN.life);
+                
+                if( c.a < _AlphaCuttoff ){discard;}
+                // Metallic and smoothness come from slider variables
+                o.Metallic = _Metallic;
+                o.Smoothness = _Smoothness;
+                o.Normal = UnpackNormal (tex2D (_BumpMap, IN.uv_BumpMap));
+                // o.Alpha = c.a;
+
+            }
+            ENDCG
+
+
+
+         Cull Back
+        Tags { "RenderType"="Opaque" }
+        LOD 200
+
+        CGPROGRAM
+        // Physically based Standard lighting model, making it so we add shadows
+        #pragma surface surf Standard   vertex:vert addshadow
+        #pragma shader_feature WORLD_NORMAL
+        // Use shader model 4.5 to make sure we have access to compute buffer
+        #pragma target 4.5
+
+            #include "UnityCG.cginc"
+       
+    
+      
+
+            // input info
+            struct appdata {
+                float4 vertex : POSITION;
+                float3 normal : NORMAL;
+                float4 tangent : TANGENT;
+                float4 texcoord : TEXCOORD0;
+                uint id : SV_VertexID;
+            };
+
+
+            // info passed to surface shader
+            struct Input{
+                float2 uv_BumpMap;
+                float2 uv_MainTex;
+                float2 uv_Band;
+            };   
+
+            sampler2D _MainTex;
+            sampler2D _BumpMap;
+ 
+            #if defined(SHADER_API_D3D11) || defined(SHADER_API_PSSL) || defined(SHADER_API_METAL) || defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES3) || defined(SHADER_API_VULKAN) || defined(SHADER_API_SWITCH) // D3D11, D3D12, XB1, PS4, iOS, macOS, tvOS, glcore, gles3, webgl2.0, Switch
+                StructuredBuffer<float4x4> _PointBuffer;
+            #endif
+
+            #include "CurveInfo.cginc"
+
+
+            void vert (inout appdata v,out Input o) 
+            {
+             
+
+                int vid = v.id;
+                
+                UNITY_INITIALIZE_OUTPUT(Input,o);
+
+                #if defined(SHADER_API_D3D11) || defined(SHADER_API_PSSL) || defined(SHADER_API_METAL) || defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES3) || defined(SHADER_API_VULKAN) || defined(SHADER_API_SWITCH) // D3D11, D3D12, XB1, PS4, iOS, macOS, tvOS, glcore, gles3, webgl2.0, Switch
+
+                int quadID = vid /6;
+
+                int rowID = quadID / _ResolutionX;
+                int colID = quadID % _ResolutionX;
+                int inQuadID = vid % 6;
+
+                float val = float(rowID) / float(_Resolution);
+                float valUp = float(rowID+1) / float(_Resolution);
+
+                float col = float(colID) / float(_ResolutionX);
+                float colUp = float(colID+1) / float(_ResolutionX);
 
 
                 val *= _CurveLength;
@@ -160,49 +259,88 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
                 GetCubicInformation( val , pos , dir , tang );
                 GetCubicInformation( valUp , posUp , dirUp , tangUp );
 
-                float3 p1 = pos - tang * _CurveWidth;
-                float3 p2 = pos + tang * _CurveWidth;
-                float3 p3 = posUp - tangUp * _CurveWidth;
-                float3 p4 = posUp + tangUp * _CurveWidth;
+                float3 p1 = pos   + (col   -.5)* tang * _CurveWidthMultiplier;
+                float3 p2 = pos   + (colUp -.5)* tang * _CurveWidthMultiplier;
+                float3 p3 = posUp + (col   -.5)* tangUp * _CurveWidthMultiplier;
+                float3 p4 = posUp + (colUp -.5)* tangUp * _CurveWidthMultiplier;
 
+                float3 fNor;
+                float3 fTan;
+
+                float3 nor = normalize(cross(dir,tang));
+                float3 norUp = normalize(cross(dirUp,tangUp));
 
                 float3 fPos;
                 float2 fUV;
 
                 if( inQuadID == 0 ){
                     fPos = p1;
-                    fUV = float2( 0,val);
+                    fUV = float2( col,val);
+                    fNor = nor;
+                    fTan = tang;
                 }else if( inQuadID == 1 ){
                     fPos = p2;
-                    fUV = float2( 1,val);
+                    fUV = float2( colUp,val);
+                    fNor = nor;
+                    fTan = tang;
                 }else if( inQuadID == 2 ){                         
                     fPos = p4;
-                    fUV = float2( 1,valUp);
+                    fUV = float2( colUp,valUp);
+                    fNor = norUp;
+                    fTan = tangUp;
                 }else if( inQuadID == 3 ){
                     fPos = p1;
-                    fUV = float2( 0,val);
+                    fUV = float2( col,val);
+                    fNor = nor;
+                    fTan = tang;
                 }else if( inQuadID == 4 ){
                     fPos = p4;
-                    fUV = float2( 1,valUp);
+                    fUV = float2( colUp,valUp);
+                    fNor = norUp;
+                    fTan = tangUp;
                 }else{
                     fPos = p3;
-                    fUV = float2( 0,valUp);
+                    fUV = float2( col,valUp);
+                    fNor = norUp;
+                    fTan = tangUp;
                 }
 
-                o.uv = fUV;
-                o.vertex = mul(UNITY_MATRIX_VP , float4(fPos,1));//(v.vertex);
+                v.texcoord = float4( fUV, 0, 0 );
+                v.normal =  normalize(mul( unity_WorldToObject , float4( -fNor ,0 )).xyz);
+                v.vertex = float4(mul( unity_WorldToObject , float4( fPos ,1 )).xyz,1);
+                v.tangent = float4(normalize(mul( unity_WorldToObject , float4( fTan ,0 )).xyz),1);
               
+                #endif
 
-                return o;
             }
 
-            fixed4 frag (v2f i) : SV_Target
+            float _Metallic;
+            float _Smoothness;
+
+            float4 _StartingColor;
+            float4 _EndingColor;
+            float _AlphaCuttoff;
+          
+        
+            void surf (Input IN, inout SurfaceOutputStandard o)
             {
-                // sample the texture
-                fixed4 col = sin(i.uv.y * 100) + sin(i.uv.x * 40);//float4(1,1,1,1);
-                return col;
+                // Albedo comes from a texture tinted by color
+
+                float4 c = tex2D(_MainTex , IN.uv_MainTex );
+                
+                o.Albedo = c.xyz;//*  lerp(_StartingColor, _EndingColor, IN.life);
+                
+                if( c.a < _AlphaCuttoff ){discard;}
+                // Metallic and smoothness come from slider variables
+                o.Metallic = _Metallic;
+                o.Smoothness = _Smoothness;
+                o.Normal = UnpackNormal (tex2D (_BumpMap, IN.uv_BumpMap));
+                // o.Alpha = c.a;
+
             }
             ENDCG
-        }
+
     }
+    
+    FallBack "Diffuse" 
 }
