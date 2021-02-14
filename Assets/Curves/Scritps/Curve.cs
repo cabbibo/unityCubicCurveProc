@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
  using static Unity.Mathematics.math;
 using Unity.Mathematics;
+using UnityEngine.Events;
 
 
 namespace MagicCurve{
@@ -16,26 +17,26 @@ public class Curve : MonoBehaviour
 {
 
     public bool closed;
-    public bool showCurve;
-    public bool showAddPositions;
+    public bool showCurve = true;
+    public bool showAddPositions=true;
     public bool showEvenBasis;
     public bool showEvenMovementBasis;
     public bool showCurveMovementBasis;
     public bool showPointArrows;
 
-    public float curveVizSpeed;
+    public float curveVizSpeed = .1f;
 
     public bool showAllControls;
     public bool showRotateControls;
     public bool showScaleControls;
-    public bool showMoveControls;
+    public bool showMoveControls = true;
 
     public bool haveFun;
 
     public Font labelFont;
 
     [Range(.1f,2)]
-    public float interfaceScale;
+    public float interfaceScale = 1;
 
     
     [Range(60,1000)]
@@ -44,11 +45,11 @@ public class Curve : MonoBehaviour
 
   
     [Range(.1f,100)]
-    public float stepLength;
+    public float stepLength = .3f;
     private float oStepLength;
  
     [Range(.001f,1)]
-    public float stepResolution;
+    public float stepResolution = .5f;
     private float oStepResolution;
 
     public int selectedPoint;
@@ -100,6 +101,37 @@ public class Curve : MonoBehaviour
       oStepLength = stepLength;
       oStepResolution = stepResolution;
       audioSource = GetComponent<AudioSource>();
+
+      ResetValues();
+
+    }
+
+    void ResetValues(){
+
+      if(positions == null){
+      positions = new List<Vector3>();
+      rotations = new List<Quaternion>();
+      powers = new List<Vector3>();
+
+      positions.Add(transform.position);
+      rotations.Add(transform.rotation);
+      powers.Add(transform.localScale);
+
+      
+      positions.Add(transform.position + transform.forward);
+      rotations.Add(transform.rotation);
+      powers.Add(transform.localScale);
+
+      if(pointMatrices == null){
+        pointMatrices = new Matrix4x4[2];
+
+      }
+
+      FullBake();
+      //FullBake();
+
+      }
+
 
     }
 
@@ -220,6 +252,9 @@ public class Curve : MonoBehaviour
     }
 
     public void UpdateMatrices(){
+
+      
+      CurveChanged.Invoke(this);
       if( pointMatrices.Length != positions.Count ){
         pointMatrices = new Matrix4x4[positions.Count];
       }
@@ -502,6 +537,9 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
       bakedDistCount = bakedDists.Length;
 
 
+      
+      BakeChanged.Invoke(this);
+
 
     }
 
@@ -515,9 +553,12 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
     public float getEvenDistAlong( float v ){
       if( v >= 1){ v = 1; }
       if( v <= 0){ v = 0;}
-      float segment = v * (bakedPoints.Length-1);
+      float segment = v * (float)(bakedPoints.Length-1);
       float min = Mathf.Floor(segment);
       float max = Mathf.Max(segment);
+
+      
+      //print( segment - min );
 
        if( segment %1 == 0 || min == max){
         return bakedDists[(int)segment];
@@ -636,7 +677,54 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
     }
 
 
+    public void GetDataFromValueAlongCurve( float v , out float3 pos , out float3 fwd , out float3 up , out float3 rit , out float scale){
+      GetCubicInformation( getEvenDistAlong(v) , out pos , out fwd , out rit , out scale );
+      up = -cross( d,t);
+    }
+
+
+    public void GetDataFromLengthAlongCurve( float v , out float3 pos , out float3 fwd , out float3 up , out float3 rit , out float scale){
+//      print(v/totalCurveLength);
+      GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out pos , out fwd , out rit , out scale );
+      up = -cross( d,t);
+    }
+
+
+    public ComputeBuffer GetEvenPointTransformBuffer(){
+
+
+      // THANK U PASTORAL MAC
+      ComputeBuffer buffer= new ComputeBuffer(bakedMatrices.Length,sizeof(float)*16);
+      buffer.SetData(bakedMatrices);
+
+      return buffer;
+
+    }
+
+
+
+
+
+public CurveEvent BakeChanged = new CurveEvent();
+public CurveEvent CurveChanged = new CurveEvent();
+
+
+
+
+
+
 }
+
+
+/*
+EVENTS
+*/
+[System.Serializable]
+public class CurveEvent : UnityEvent<Curve>
+{
+}
+
+
 }
 
 

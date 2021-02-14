@@ -8,6 +8,8 @@ using Unity.Mathematics;
 
 namespace MagicCurve{
 
+// TODO: 
+// hotkeys ( trasnform rotate scale etc )
 
 [CustomEditor(typeof(Curve))]
 public class CurveEditor : Editor
@@ -552,13 +554,66 @@ Movement
                 float3 evenPoint = float3(0,0,0); float3 curvePoint = float3(0,0,0);
 
                 if( curve.showEvenMovementBasis ){
-                        int i = (int)Mathf.Floor( curvePosition * (float)curve.bakedPoints.Length );
+
+                    float f =  curvePosition * ((float)curve.bakedPoints.Length-1);
+
+                    int floor = (int)Mathf.Floor(f);
+                    int ceil = (int)Mathf.Ceil(f);
+
+
+                    float fLerp = f - (float)floor;
+
+                    
+                         //int i = (int)Mathf.Floor( curvePosition * (float)curve.bakedPoints.Length );\
+
+                        int i = floor;
                         Handles.color = Color.HSVToRGB( (curvePosition * 10+.5f) %1,.5f,1);
-                        p = curve.bakedPoints[i];
+
+
+
+                    float3 outP; float3 outFwe
+                        curve.GetDataFromValueAlongCurve(curvePosition);    
+                    if( fLerp == 0 || fLerp == 1){
+                        
+                        Debug.Log("hitting here");
+                        
+                   
+                        p =  curve.bakedPoints[i];
+
+                        curve.GetDataFromValueAlongCurve(curvePosition);        
+                        evenPoint = p;    public void GetDataFromLengthAlongCurve( float v , out float3 pos , out float3 fwd , out float3 up , out float3 rit , out float scale){
+//      print(v/totalCurveLength);
+      GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out pos , out fwd , out rit , out scale );
+      up = -cross( d,t);
+    }
+                        
+                       //p1 =  p + curve.bakedTangents[i] * curve.bakedWidths[i] * .8f;
+                       //p2 =  p + curve.bakedNormals[i] * curve.bakedWidths[i] * .8f;
+                       //p3 =  p + curve.bakedDirections[i] * curve.bakedWidths[i] * .8f;
+
+                        
+                        p1 =  p + (float3)curve.bakedTangents[i] * curve.bakedWidths[i] * .8f;
+                        p2 =  p + (float3)curve.bakedNormals[i] * curve.bakedWidths[i] * .8f;
+                        p3 =  p + (float3)curve.bakedDirections[i] * curve.bakedWidths[i] * .8f;
+
+                    }else{
+
+
+                   
+                        p = lerp( curve.bakedPoints[i] , curve.bakedPoints[i+1] , fLerp);
                         evenPoint = p;
-                        p1 =  curve.bakedPoints[i] + curve.bakedTangents[i] * curve.bakedWidths[i] * .8f;
-                        p2 =  curve.bakedPoints[i] + curve.bakedNormals[i] * curve.bakedWidths[i] * .8f;
-                        p3 =  curve.bakedPoints[i] + curve.bakedDirections[i] * curve.bakedWidths[i] * .8f;
+                        
+                       //p1 =  p + curve.bakedTangents[i] * curve.bakedWidths[i] * .8f;
+                       //p2 =  p + curve.bakedNormals[i] * curve.bakedWidths[i] * .8f;
+                       //p3 =  p + curve.bakedDirections[i] * curve.bakedWidths[i] * .8f;
+
+                        
+                        p1 =  p + lerp(curve.bakedTangents[i],curve.bakedTangents[i+1],fLerp) * lerp(curve.bakedWidths[i],curve.bakedWidths[i+1],fLerp) * .8f;
+                        p2 =  p + lerp(curve.bakedNormals[i],curve.bakedNormals[i+1],fLerp) * lerp(curve.bakedWidths[i],curve.bakedWidths[i+1],fLerp) * .8f;
+                        p3 =  p + lerp(curve.bakedDirections[i],curve.bakedDirections[i+1],fLerp) * lerp(curve.bakedWidths[i],curve.bakedWidths[i+1],fLerp) * .8f;
+                    }
+
+                        
                         Handles.DrawLine( p , p1 );
                         Handles.DrawLine( p , p2 );
                         Handles.DrawLine( p , p3 );
@@ -568,13 +623,14 @@ Movement
                         Handles.DrawSolidDisc(p3,(Vector3)(p3-p),GetSize(p,.04f));
 
                          Handles.BeginGUI();
-                    Vector3 pos = p;
-                    Vector2 pos2D = HandleUtility.WorldToGUIPoint(pos);
-                    
-                    label.normal.textColor = Handles.color;
-                    float insc = curve.interfaceScale;
-                    GUI.Label(new Rect(pos2D.x-50*insc, pos2D.y-30*insc, 100*insc, 20*insc), "Even Speed", label);
-                    Handles.EndGUI();
+                        Vector3 pos = p;
+                        Vector2 pos2D = HandleUtility.WorldToGUIPoint(pos);
+                        
+                        label.normal.textColor = Handles.color;
+                        float insc = curve.interfaceScale;
+                        GUI.Label(new Rect(pos2D.x-50*insc, pos2D.y-30*insc, 100*insc, 20*insc), "Even Speed", label);
+                        Handles.EndGUI();
+
                         
                     
                 }
@@ -605,7 +661,7 @@ Movement
 
                     GUI.color = Color.white;
                     
-        label.normal.textColor = Handles.color;
+                    label.normal.textColor = Handles.color;
                     GUI.Label(new Rect(pos2D.x-50*insc, pos2D.y-30*insc, 100*insc, 20*insc), "Curve Speed", label);
                     Handles.EndGUI();
                     /*
