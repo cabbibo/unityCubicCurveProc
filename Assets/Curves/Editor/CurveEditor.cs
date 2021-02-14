@@ -571,21 +571,23 @@ Movement
 
 
 
-                    float3 outP; float3 outFwe
-                        curve.GetDataFromValueAlongCurve(curvePosition);    
-                    if( fLerp == 0 || fLerp == 1){
+                        float3 up;
+                        float3 r;
+                        curve.GetDataFromValueAlongCurve(curvePosition , out p , out d , out up , out r  , out w);    
+
+
+                        p1 = p + r * w * .8f;
+                        p2 = p + d * w * .8f;
+                        p3 = p + up * w * .8f;
+                   /* if( fLerp == 0 || fLerp == 1){
                         
                         Debug.Log("hitting here");
                         
                    
                         p =  curve.bakedPoints[i];
 
-                        curve.GetDataFromValueAlongCurve(curvePosition);        
-                        evenPoint = p;    public void GetDataFromLengthAlongCurve( float v , out float3 pos , out float3 fwd , out float3 up , out float3 rit , out float scale){
-//      print(v/totalCurveLength);
-      GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out pos , out fwd , out rit , out scale );
-      up = -cross( d,t);
-    }
+                        //curve.GetDataFromValueAlongCurve(curvePosition);        
+                        evenPoint = p;
                         
                        //p1 =  p + curve.bakedTangents[i] * curve.bakedWidths[i] * .8f;
                        //p2 =  p + curve.bakedNormals[i] * curve.bakedWidths[i] * .8f;
@@ -612,7 +614,7 @@ Movement
                         p2 =  p + lerp(curve.bakedNormals[i],curve.bakedNormals[i+1],fLerp) * lerp(curve.bakedWidths[i],curve.bakedWidths[i+1],fLerp) * .8f;
                         p3 =  p + lerp(curve.bakedDirections[i],curve.bakedDirections[i+1],fLerp) * lerp(curve.bakedWidths[i],curve.bakedWidths[i+1],fLerp) * .8f;
                     }
-
+*/
                         
                         Handles.DrawLine( p , p1 );
                         Handles.DrawLine( p , p2 );

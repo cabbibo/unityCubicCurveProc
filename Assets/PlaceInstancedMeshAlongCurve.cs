@@ -28,42 +28,40 @@ public class PlaceInstancedMeshAlongCurve : MonoBehaviour
     public void OnEnable(){
         filter = GetComponent<MeshFilter>();
         curve.BakeChanged.AddListener(BuildMesh);
+        BuildMesh(curve);
     }
 
     public void OnDisable(){
         curve.BakeChanged.AddListener(BuildMesh);
     }
-void BuildMesh(Curve c){
+    void BuildMesh(Curve c){
 
-    
+        print("BUIDLING");
 
-    CombineInstance[] combine = new CombineInstance[numberOfObjects];
+        CombineInstance[] combine = new CombineInstance[numberOfObjects];
 
-    for(int i = 0; i < numberOfObjects; i++){
+        for(int i = 0; i < numberOfObjects; i++){
 
-        float val = (float)i/numberOfObjects;
+            float val = (float)i/numberOfObjects;
 
-        float3 p; float3 f; float3 u; float3 r; float s;
+            float3 p; float3 f; float3 u; float3 r; float s;
 
-        curve.GetDataFromValueAlongCurve(val,out p,out f,out u,out r,out s);
+            curve.GetDataFromValueAlongCurve(val,out p,out f,out u,out r,out s);
 
-        combine[i].transform = Matrix4x4.TRS( p + f * offset.z + u * offset.y + r * offset.z, Quaternion.LookRotation( f,u) , Vector3.one * s * scaleMultiplier);
-        combine[i].mesh = mesh;
+            combine[i].transform = Matrix4x4.TRS( p + f * offset.z + u * offset.y + r * offset.z, Quaternion.LookRotation( f,u) , Vector3.one * s * scaleMultiplier);
+            combine[i].mesh = mesh;
 
 
+
+
+        }
+        // GO ahead and combine the meshes 
+        // ( using the big index incase there are too many verts! )
+        filter.sharedMesh = new Mesh();
+        filter.sharedMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        filter.sharedMesh.CombineMeshes(combine);
 
 
     }
-   
-   
 
-
-    // GO ahead and combine the meshes 
-    // ( using the big index incase there are too many verts! )
-   filter.sharedMesh = new Mesh();
-   filter.sharedMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-   filter.sharedMesh.CombineMeshes(combine);
-
-
-}
 }

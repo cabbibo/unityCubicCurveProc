@@ -184,8 +184,8 @@ public class Curve : MonoBehaviour
           //powers[i].position
 
           Vector3 p1  = positions[i];
-          Vector3 p2 = positions[i] + ( rotations[i] * float3(0,0,1) * powers[i].x );
-          Vector3 p3 = positions[i+2] - ( rotations[i+2] * float3(0,0,1) * powers[i+2].y );
+          Vector3 p2  = positions[i] + ( rotations[i] * float3(0,0,1) * powers[i].x );
+          Vector3 p3  = positions[i+2] - ( rotations[i+2] * float3(0,0,1) * powers[i+2].y );
           Vector3 p4  = positions[i+2];
 
           Vector3 b1 = (p1 + p2)/2;
@@ -555,7 +555,7 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
       if( v <= 0){ v = 0;}
       float segment = v * (float)(bakedPoints.Length-1);
       float min = Mathf.Floor(segment);
-      float max = Mathf.Max(segment);
+      float max = Mathf.Ceil(segment);
 
       
       //print( segment - min );
@@ -563,7 +563,9 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
        if( segment %1 == 0 || min == max){
         return bakedDists[(int)segment];
       }else{
-        return lerp( bakedDists[(int)min] ,  bakedDists[(int)max] , (segment-min));
+        float lerpVal = (segment-min);
+        float evenDist =  lerp( bakedDists[(int)min] ,  bakedDists[(int)max] , (segment-min));
+        return evenDist;
       }
 
     }
@@ -684,7 +686,7 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
 
 
     public void GetDataFromLengthAlongCurve( float v , out float3 pos , out float3 fwd , out float3 up , out float3 rit , out float scale){
-//      print(v/totalCurveLength);
+      
       GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out pos , out fwd , out rit , out scale );
       up = -cross( d,t);
     }
