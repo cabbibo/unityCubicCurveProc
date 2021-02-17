@@ -27,10 +27,20 @@ public class CurveEditor : Editor
     float curvePosition = 0;
 
     GUIStyle label;
+
+
+    
+            float3 t; float3 d; float w; float3 p;
+            
+            float3 p1; float3 p2; float3 p3; float a; float whichVal;
+            float3 u; float3 r; 
+            Color c;
+
     
     void OnEnable(){
         
         curve = (Curve)target;
+        curve.GetComponent<AudioSource>().hideFlags = HideFlags.HideInInspector;
 
         label = new GUIStyle();
         label.fontSize = (int)(15 * curve.interfaceScale+1);;
@@ -56,20 +66,17 @@ public class CurveEditor : Editor
      void CheckForPlay(){
          if( isMoving == true && moveDelta > .3f){
              moveDelta = 0;
-             isMoving = false;
-             curve.playClip( curve.moveClip );
+             curve.playClip( curve.moveClip  , length(startMovePoint - currentMovePoint) / GetSize( startMovePoint,1));
          }
 
           if( isScaling == true && scaleDelta > .3f){
              scaleDelta = 0;
-             isScaling = false;
-             curve.playClip( curve.scaleClip );
+             curve.playClip( curve.scaleClip  , length(startScale - currentScale) / GetSize( startScale,1));
          }
 
          if( isRotating == true && rotateDelta > 10){
              rotateDelta = 0;
-             isRotating = false;
-             curve.playClip( curve.rotateClip );
+             curve.playClip( curve.rotateClip  , Quaternion.Angle( startRot, currentRot) / 100);
          }
      }
 
@@ -81,6 +88,16 @@ public class CurveEditor : Editor
     float rotateDelta;
     float scaleDelta;
     float moveDelta;
+
+    float3 startMovePoint;
+    float3 currentMovePoint;
+
+
+    Quaternion startRot;
+    Quaternion currentRot;
+
+    float3 startScale;
+    float3 currentScale;
 
 
     void Input()
@@ -143,8 +160,6 @@ public class CurveEditor : Editor
             Debug.Log("itsHappening");
             Handles.DrawLine( Vector3.zero , Vector3.one * 1000);
         }
-            float3 t; float3 d; float w; float3 p;
-
        /*
 
 
@@ -168,6 +183,16 @@ public class CurveEditor : Editor
             Handles.DrawPolyLine(lilPos);
 
             }
+
+
+
+            if( curve.showBakedPoints ){
+                for( int i = 0; i < curve.bakedPoints.Length; i++){
+                    c = Color.HSVToRGB((((float)i/(float)curve.bakedPoints.Length) + curvePosition*2)%1,.5f,1f);
+                    Handles.color = c;
+                    Handles.DrawWireCube(curve.bakedPoints[i], Vector3.one * GetSize(curve.bakedPoints[i], .05f) );
+                }
+            }
     
         
             /*
@@ -178,29 +203,11 @@ public class CurveEditor : Editor
             
 
             if( curve.showEvenBasis ){
-            Vector3[] pos2 = new Vector3[ curve.bakedPoints.Length * 2 ];
 
-            Handles.color = Color.HSVToRGB(0,.5f,1f);
-            for(int i = 0; i< curve.bakedPoints.Length; i++){
-                pos2[i * 2 + 0 ] = curve.bakedPoints[i];
-                pos2[i * 2 + 1 ] = curve.bakedPoints[i] + curve.bakedTangents[i] * curve.bakedWidths[i] * .5f;
-            }            
-            Handles.DrawLines(pos2);
-
-            Handles.color = Color.HSVToRGB(.33f,.5f,1f);
-            for(int i = 0; i< curve.bakedPoints.Length; i++){
-                pos2[i * 2 + 0 ] = curve.bakedPoints[i] ;
-                pos2[i * 2 + 1 ] = curve.bakedPoints[i] + curve.bakedNormals[i] * curve.bakedWidths[i] * .5f;
-            }            
-            Handles.DrawLines(pos2);
-
-             Handles.color = Color.HSVToRGB(.66f,.5f,1f);
-            for(int i = 0; i< curve.bakedPoints.Length; i++){
-                pos2[i * 2 + 0 ] = curve.bakedPoints[i] ;
-                pos2[i * 2 + 1 ] = curve.bakedPoints[i] + curve.bakedDirections[i] * curve.bakedWidths[i] * .5f;
-            }            
-            Handles.DrawLines(pos2);
-
+                for( int i = 0; i < curve.evenBasisVizCount; i++ ){
+                    float v = (float)i / ((float) curve.evenBasisVizCount-1);
+                    DrawBasisAtPoint( v , Color.HSVToRGB(0,.5f,1f) , Color.HSVToRGB(0.33f,.5f,1f),Color.HSVToRGB(0.66f,.5f,1f) , 1);
+                }
             }
 
             Handles.color = Color.HSVToRGB(.7f,.5f,1f);
@@ -212,17 +219,19 @@ public class CurveEditor : Editor
                 totalDivisor *= 2;
 
             }
-            for( int i = 0; i < newCount; i++ ){
+            for( int i = 0; i < curve.addPointVizCount; i++ ){
 
                 if( curve.showAddPositions ){
-                    int fID = i * totalDivisor;
-                    Quaternion rot = Quaternion.LookRotation(  curve.bakedDirections[fID] , curve.bakedNormals[fID] );
-                    float s =  GetSize(curve.bakedPoints[fID], .05f);// HandleUtility.GetHandleSize(curve.bakedPoints[i]) * .04f;
-                    bool hit = Handles.Button( curve.bakedPoints[fID] , rot ,s, s,  Handles.DotHandleCap );
+
+                    float valAlongCurve = (float)i/((float)curve.addPointVizCount-1);
+
+                    curve.GetDataFromValueAlongCurve(valAlongCurve , out p , out d , out u , out r  , out w); 
+                    float s =  GetSize(p, .05f);
+                    bool hit = Handles.Button( p , Quaternion.identity ,s, s,  Handles.DotHandleCap );
 
                     if( hit ){
                         Undo.RecordObject(curve,"addPoint");
-                        curve.AddPoint(fID);
+                        curve.AddPoint(valAlongCurve);
                         hasChanged = true;
                     }
                 }
@@ -271,7 +280,13 @@ public class CurveEditor : Editor
                 Handles.color = Color.HSVToRGB(0,.5f,1);
                 newRot = Handles.Disc( rot ,pos ,  up , GetSize(pos,.6f)  , false , 0);
                 if( newRot != rot ){
+
+                    currentRot = newRot;
+                    if( isRotating == false ){
+                        startRot = newRot;
+                    }
                     isRotating = true;
+
                     rotateDelta += Quaternion.Angle(newRot,rot);
                     Undo.RecordObject(curve,"Rotate");
                     curve.rotations[i] = newRot;
@@ -281,9 +296,14 @@ public class CurveEditor : Editor
                 Handles.DrawLine( pos , pos + up * GetSize(pos,.65f));
                 Handles.DrawWireCube(pos + up * GetSize(pos,.65f),  Vector3.one * GetSize(pos,.05f));
 
+
                 Handles.color = Color.HSVToRGB(.1f,.5f,1);
                 newRot = Handles.Disc( rot ,pos ,  right ,GetSize( pos,.6f)  , false , 0);
                 if( newRot != rot ){
+                     currentRot = newRot;
+                    if( isRotating == false ){
+                        startRot = newRot;
+                    }
                     isRotating = true;
                     rotateDelta += Quaternion.Angle(newRot,rot);
                     Undo.RecordObject(curve,"Rotate");
@@ -297,6 +317,10 @@ public class CurveEditor : Editor
                 Handles.color = Color.HSVToRGB(.2f,.5f,1);
                  newRot = Handles.Disc( rot ,pos ,  forward ,GetSize( pos,.6f) , false , 0);
                 if( newRot != rot ){
+                     currentRot = newRot;
+                    if( isRotating == false ){
+                        startRot = newRot;
+                    }
                     isRotating = true;
                     rotateDelta += Quaternion.Angle(newRot,rot);
                     Undo.RecordObject(curve,"Rotate");
@@ -330,9 +354,13 @@ public class CurveEditor : Editor
                 dir = (fPos2 -pos);
                 Handles.DrawLine(fPos2 , fPos1);
              
-                if( newPos != fPos2 ){
+                if( newPos != fPos2 ){      
+                    currentScale = fPos2;
+                    if( isScaling == false ){
+                        startScale = fPos2;
+                        isScaling = true;
+                    }
                     scaleDelta += length(newPos - fPos2) / GetSize(pos , 1);
-                    isScaling = true;
                     Undo.RecordObject(curve,"Change Power");
                     curve.ChangePowerX( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude / size);
                     hasChanged = true;
@@ -348,9 +376,13 @@ public class CurveEditor : Editor
                 dir = (fPos2 -pos);
                 Handles.DrawLine(fPos2 , fPos1);
              
-                if( newPos != fPos2 ){
+                if( newPos != fPos2 ){      
+                    currentScale = fPos2;
+                    if( isScaling == false ){
+                        startScale = fPos2;
+                        isScaling = true;
+                    }
                     scaleDelta += length(newPos - fPos2) / GetSize(pos , 1);
-                    isScaling = true;
                     Undo.RecordObject(curve,"Change Power");
                     curve.ChangePowerY( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude / size);
                     hasChanged = true;
@@ -368,8 +400,12 @@ public class CurveEditor : Editor
                 Handles.DrawLine(fPos2 , fPos1);
              
                 if( newPos != fPos2 ){
+                      currentScale = fPos2;
+                    if( isScaling == false ){
+                        startScale = fPos2;
+                        isScaling = true;
+                    }
                     scaleDelta += length(newPos - fPos2) / GetSize(pos , 1);
-                    isScaling = true;
                     Undo.RecordObject(curve,"Change Power");
                     curve.ChangePowerZ( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude / size);
                     hasChanged = true;
@@ -384,51 +420,47 @@ public class CurveEditor : Editor
                 Handles.DrawLine(fPos2 , fPos1);
              
                 if( newPos != fPos2 ){
+                    
+
+                    currentScale = fPos2;
+                    if( isScaling == false ){
+                        startScale = fPos2;
+                        isScaling = true;
+                    }
+                    
                     scaleDelta += length(newPos - fPos2) / GetSize(pos , 1);
-                    isScaling = true;
                     Undo.RecordObject(curve,"Change Power");
                     curve.ChangePowerZ( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude / size);
                     hasChanged = true;
                     curve.selectedPoint=i;
                 }
-                /*
 
-                float defaultSize = HandleUtility.GetHandleSize(pos);
 
-                Handles.color = Color.HSVToRGB(.5f,.5f,1);
 
-                fPos = pos + right * curve.powers[i].z;
-                newPos = Handles.FreeMoveHandle(fPos, Quaternion.identity, size, Vector3.zero, Handles.CircleHandleCap);
-                dir = (newPos - pos);
-                Handles.DrawLine(newPos-dir.normalized*size , pos);
-                
-                if( newPos != fPos ){
-                    scaleDelta += length(newPos - fPos) / GetSize(pos , 1);
-                    isScaling = true;
-                    Undo.RecordObject(curve,"Change Power");
-                    curve.ChangePowerZ( i,  (newPos - pos).magnitude);
-                    hasChanged = true;
-                    curve.selectedPoint=i;
+
+                   if( isScaling){
+                Handles.color = Color.HSVToRGB(.4f,0,1);
+
+                    Vector3[] positions = new []{(Vector3)startScale,(Vector3)currentScale};
+                    Handles.DrawLine(startScale,currentScale);
+                    Handles.DrawWireDisc( startScale , Camera.current.transform.position - (Vector3)startScale , GetSize(startScale,.03f));
                 }
-
-                fPos = pos - right * curve.powers[i].z;
-                newPos = Handles.FreeMoveHandle(fPos, Quaternion.identity, size, Vector3.zero, Handles.CircleHandleCap);
-                dir = (newPos - pos);
-                Handles.DrawLine(newPos-dir.normalized*size , pos);
-
-                if( newPos != fPos ){
-                    Undo.RecordObject(curve,"Change Power");
-                    scaleDelta += length(newPos - fPos) / GetSize(pos , 1);
-                    isScaling = true;
-                    curve.ChangePowerZ( i, (newPos - pos).magnitude);
-                    hasChanged = true;
-                    curve.selectedPoint=i;
-                }
-*/
-        
-
+    
 
             }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
    
             if( i != curve.selectedPoint && curve.showAllControls != true ){
@@ -442,25 +474,45 @@ public class CurveEditor : Editor
                 }
             }
             
+         
             if(i == curve.selectedPoint ){
                 // draw it but can't hit 
-                Handles.color = Color.HSVToRGB(.9f,.3f,1);//,.5f,1);
-                bool    hit = Handles.Button( pos , lookAtCam , GetSize( pos , .8f ) ,0 ,  Handles.CircleCap );
+                Handles.color = Color.HSVToRGB(.9f,1,1);//,.5f,1);
+                //bool    hit = Handles.Button( pos , lookAtCam , GetSize( pos , 2f ) ,0 ,  Handles.CircleCap );
                         //hit = Handles.Button( pos , lookAtCam , GetSize( pos , .62f ) ,0 ,  Handles.CircleCap );
                         //hit = Handles.Button( pos , lookAtCam , GetSize( pos , .85f ) ,0 ,  Handles.CircleCap );
             }
          
 
+
+
+
+
+
+
             if( (i == curve.selectedPoint || curve.showAllControls ) && curve.showMoveControls){
                 Handles.color = Color.HSVToRGB(.6f,0.5f,1);
                 newPos = Handles.FreeMoveHandle( pos ,  rot,GetSize(pos , .3f) , Vector3.zero ,  Handles.CircleHandleCap );
+                
                 if( newPos != pos ){
                     Undo.RecordObject(curve,"Move");
                     curve.positions[i] = newPos;
                     hasChanged = true;
                     curve.selectedPoint=i;
                     moveDelta += length(newPos - pos) / GetSize(pos , 1);
+
+                    currentMovePoint = newPos;
+                    if( isMoving == false ){
+                        startMovePoint = newPos;
+                    }
+
                     isMoving = true;
+                }
+
+
+                if( isMoving){
+                    Handles.DrawDottedLine(startMovePoint,currentMovePoint, length(startMovePoint-currentMovePoint)/4);
+                    Handles.DrawSolidDisc( startMovePoint , currentMovePoint-startMovePoint , GetSize(startMovePoint,.1f));
                 }
                     
             }            
@@ -518,7 +570,6 @@ public class CurveEditor : Editor
 
             */
 
-            float3 p1; float3 p2; float3 p3; float a; float whichVal;
             if( curve.haveFun ){
 
                 Handles.color = Color.HSVToRGB(curvePosition * 10 % 1,1,1);//,.5f,1);
@@ -554,118 +605,20 @@ Movement
                 float3 evenPoint = float3(0,0,0); float3 curvePoint = float3(0,0,0);
 
                 if( curve.showEvenMovementBasis ){
-
-                    float f =  curvePosition * ((float)curve.bakedPoints.Length-1);
-
-                    int floor = (int)Mathf.Floor(f);
-                    int ceil = (int)Mathf.Ceil(f);
-
-
-                    float fLerp = f - (float)floor;
-
+                    Color c = Color.HSVToRGB( (curvePosition * 10+.5f) %1,.5f,1);
+                    DrawBasisAtPoint( curvePosition, c,c,c ,3);
                     
-                         //int i = (int)Mathf.Floor( curvePosition * (float)curve.bakedPoints.Length );\
-
-                        int i = floor;
-                        Handles.color = Color.HSVToRGB( (curvePosition * 10+.5f) %1,.5f,1);
-
-
-
-                        float3 up;
-                        float3 r;
-                        curve.GetDataFromValueAlongCurve(curvePosition , out p , out d , out up , out r  , out w);    
-
-
-                        p1 = p + r * w * .8f;
-                        p2 = p + d * w * .8f;
-                        p3 = p + up * w * .8f;
-                   /* if( fLerp == 0 || fLerp == 1){
-                        
-                        Debug.Log("hitting here");
-                        
-                   
-                        p =  curve.bakedPoints[i];
-
-                        //curve.GetDataFromValueAlongCurve(curvePosition);        
-                        evenPoint = p;
-                        
-                       //p1 =  p + curve.bakedTangents[i] * curve.bakedWidths[i] * .8f;
-                       //p2 =  p + curve.bakedNormals[i] * curve.bakedWidths[i] * .8f;
-                       //p3 =  p + curve.bakedDirections[i] * curve.bakedWidths[i] * .8f;
-
-                        
-                        p1 =  p + (float3)curve.bakedTangents[i] * curve.bakedWidths[i] * .8f;
-                        p2 =  p + (float3)curve.bakedNormals[i] * curve.bakedWidths[i] * .8f;
-                        p3 =  p + (float3)curve.bakedDirections[i] * curve.bakedWidths[i] * .8f;
-
-                    }else{
-
-
-                   
-                        p = lerp( curve.bakedPoints[i] , curve.bakedPoints[i+1] , fLerp);
-                        evenPoint = p;
-                        
-                       //p1 =  p + curve.bakedTangents[i] * curve.bakedWidths[i] * .8f;
-                       //p2 =  p + curve.bakedNormals[i] * curve.bakedWidths[i] * .8f;
-                       //p3 =  p + curve.bakedDirections[i] * curve.bakedWidths[i] * .8f;
-
-                        
-                        p1 =  p + lerp(curve.bakedTangents[i],curve.bakedTangents[i+1],fLerp) * lerp(curve.bakedWidths[i],curve.bakedWidths[i+1],fLerp) * .8f;
-                        p2 =  p + lerp(curve.bakedNormals[i],curve.bakedNormals[i+1],fLerp) * lerp(curve.bakedWidths[i],curve.bakedWidths[i+1],fLerp) * .8f;
-                        p3 =  p + lerp(curve.bakedDirections[i],curve.bakedDirections[i+1],fLerp) * lerp(curve.bakedWidths[i],curve.bakedWidths[i+1],fLerp) * .8f;
-                    }
-*/
-                        
-                        Handles.DrawLine( p , p1 );
-                        Handles.DrawLine( p , p2 );
-                        Handles.DrawLine( p , p3 );
-                        
-                        Handles.DrawSolidDisc(p1,(Vector3)(p1-p),GetSize(p,.04f));
-                        Handles.DrawSolidDisc(p2,(Vector3)(p2-p),GetSize(p,.04f));
-                        Handles.DrawSolidDisc(p3,(Vector3)(p3-p),GetSize(p,.04f));
-
-                         Handles.BeginGUI();
-                        Vector3 pos = p;
-                        Vector2 pos2D = HandleUtility.WorldToGUIPoint(pos);
-                        
-                        label.normal.textColor = Handles.color;
-                        float insc = curve.interfaceScale;
-                        GUI.Label(new Rect(pos2D.x-50*insc, pos2D.y-30*insc, 100*insc, 20*insc), "Even Speed", label);
-                        Handles.EndGUI();
-
-                        
-                    
+                    DrawLabelAtPoint( curvePosition, "Even Speed" , Color.white );
                 }
 
                 float3 pd; 
                 if( curve.showCurveMovementBasis ){
                  
-                    Handles.color = Color.HSVToRGB(curvePosition * 10 %1,.5f,1);
-                    curve.GetCubicInformation( curvePosition , out pd , out d , out t , out w);
-                    p =   pd;
-                    curvePoint = p;
-                    p1 =  pd + t * w * .8f;
-                    p2 =  pd - cross(d,t) * w * .8f;
-                    p3 =  pd + d * w * .8f;
-                    Handles.DrawLine( p , p1 );
-                    Handles.DrawLine( p , p2 );
-                    Handles.DrawLine( p , p3 );
-                    
-                    Handles.DrawSolidDisc(p1,(Vector3)(p1-p),GetSize(p,.04f));
-                    Handles.DrawSolidDisc(p2,(Vector3)(p2-p),GetSize(p,.04f));
-                    Handles.DrawSolidDisc(p3,(Vector3)(p3-p),GetSize(p,.04f));
+                    Color c = Color.HSVToRGB( (curvePosition * 10) %1,.5f,1);
+                    DrawBasisAtPointAtCurvePoint(curvePosition,c,c,c,3);
 
-
-                    Handles.BeginGUI();
-                    Vector3 pos = p;
-                    Vector2 pos2D = HandleUtility.WorldToGUIPoint(pos);
-                    float insc = curve.interfaceScale;
-
-                    GUI.color = Color.white;
-                    
-                    label.normal.textColor = Handles.color;
-                    GUI.Label(new Rect(pos2D.x-50*insc, pos2D.y-30*insc, 100*insc, 20*insc), "Curve Speed", label);
-                    Handles.EndGUI();
+                    DrawLabelAtCurvePoint( curvePosition, "Curve Speed" , Color.white );
+            
                     /*
                     GUIContent c = new GUIContent("Curve");
                     Vector2 size = label.CalcSize(c);
@@ -692,6 +645,86 @@ Movement
 
     }
 
+
+
+    void DrawBasisAtPoint(float valAlongCurve , Color cX,Color cY, Color cZ , float scale ){
+
+    
+        curve.GetDataFromValueAlongCurve(valAlongCurve , out p , out d , out u , out r  , out w);    
+
+        p1 = p + r * w * scale;
+        p2 = p + u * w * scale;
+        p3 = p + d * w * scale;
+
+        Handles.color = cX;
+        Handles.DrawLine( p , p1 );
+        Handles.DrawSolidDisc(p1,(Vector3)(p1-p),GetSize(p,.04f));
+        
+        Handles.color = cY;
+        Handles.DrawLine( p , p2 );
+        Handles.DrawSolidDisc(p2,(Vector3)(p2-p),GetSize(p,.04f));
+
+        Handles.color = cZ;
+        Handles.DrawLine( p , p3 );
+        Handles.DrawSolidDisc(p3,(Vector3)(p3-p),GetSize(p,.04f));
+
+
+    }
+
+    void DrawBasisAtPointAtCurvePoint(float valAlongCurve , Color cX,Color cY, Color cZ , float scale){
+        
+        curve.GetDataFromCurvePoint(valAlongCurve , out p , out d , out u , out r  , out w);    
+
+        p1 = p + r * w * scale;
+        p2 = p + u * w * scale;
+        p3 = p + d * w * scale;
+
+        Handles.color = cX;
+        Handles.DrawLine( p , p1 );
+        Handles.DrawSolidDisc(p1,(Vector3)(p1-p),GetSize(p,.04f));
+        
+        Handles.color = cY;
+        Handles.DrawLine( p , p2 );
+        Handles.DrawSolidDisc(p2,(Vector3)(p2-p),GetSize(p,.04f));
+
+        Handles.color = cZ;
+        Handles.DrawLine( p , p3 );
+        Handles.DrawSolidDisc(p3,(Vector3)(p3-p),GetSize(p,.04f));
+    }
+
+
+    void DrawLabelAtPoint( float v , string s , Color c){
+        
+        Handles.BeginGUI();
+        Handles.color = c;
+        curve.GetDataFromValueAlongCurve(v , out p , out d , out u , out r  , out w);    
+        Vector2 pos2D = HandleUtility.WorldToGUIPoint(p);
+        float insc = curve.interfaceScale;
+
+        GUI.color = Color.white;
+        
+        label.normal.textColor = Handles.color;
+        GUI.Label(new Rect(pos2D.x-50*insc, pos2D.y-30*insc, 100*insc, 20*insc), s, label);
+        Handles.EndGUI();
+    }
+
+
+
+    void DrawLabelAtCurvePoint( float v , string s , Color c){
+        
+        Handles.BeginGUI();
+        Handles.color = c;
+        curve.GetDataFromCurvePoint(v , out p , out d , out u , out r  , out w);    
+        Vector2 pos2D = HandleUtility.WorldToGUIPoint(p);
+        float insc = curve.interfaceScale;
+
+        GUI.color = Color.white;
+        
+        label.normal.textColor = Handles.color;
+        GUI.Label(new Rect(pos2D.x-50*insc, pos2D.y-30*insc, 100*insc, 20*insc), s, label);
+        Handles.EndGUI();
+    }
+    
    
 }
 }

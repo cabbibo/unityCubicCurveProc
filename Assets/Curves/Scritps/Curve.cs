@@ -24,7 +24,14 @@ public class Curve : MonoBehaviour
     public bool showCurveMovementBasis;
     public bool showPointArrows;
 
+    public bool showBakedPoints;
+  
+
+    public int evenBasisVizCount = 30;
+    public int addPointVizCount = 30;
+
     public float curveVizSpeed = .1f;
+
 
     public bool showAllControls;
     public bool showRotateControls;
@@ -77,23 +84,30 @@ public class Curve : MonoBehaviour
 
      public int bakedDistCount;
 
-
+    
+     public bool doAudio;
      public float audioVolume;
 
-     public AudioClip moveClip;
-     public AudioClip scaleClip;
-     public AudioClip rotateClip;
-
-     public AudioClip addNodeClip;
-     public AudioClip deleteNodeClip;
-     public AudioClip errorClip;
+     public AudioClip moveClip        = (AudioClip)Resources.Load("tongueClick");
+     public AudioClip scaleClip       = (AudioClip)Resources.Load("tongueClick");
+     public AudioClip rotateClip      = (AudioClip)Resources.Load("tongueClick");
+     public AudioClip addNodeClip     = (AudioClip)Resources.Load("tongueClick");
+     public AudioClip deleteNodeClip  = (AudioClip)Resources.Load("tongueClick");
+     public AudioClip errorClip       = (AudioClip)Resources.Load("tongueClick");
 
      private AudioSource audioSource;
 
 
+        
+    public CurveEvent BakeChanged = new CurveEvent();
+    public CurveEvent CurveChanged = new CurveEvent();
+
+
+
          
-    private float3 p; private float3 d; private float3 t; private float w; 
-    private float3 p2; private float3 d2; private float3 t2; private float w2; 
+     float3 p;  float3 d;  float3 t;  float w; 
+     float3 p2;  float3 d2;  float3 t2;  float w2; 
+    float3 u; float3 r; 
 
     // Start is called before the first frame update
     void OnEnable(){
@@ -104,31 +118,42 @@ public class Curve : MonoBehaviour
 
       ResetValues();
 
+      if( moveClip        == null ) moveClip        = (AudioClip)Resources.Load("tongueClick");
+      if( scaleClip       == null ) scaleClip       = (AudioClip)Resources.Load("tongueClick");
+      if( rotateClip      == null ) rotateClip      = (AudioClip)Resources.Load("tongueClick");
+      if( addNodeClip     == null ) addNodeClip     = (AudioClip)Resources.Load("tongueClick");
+      if( deleteNodeClip  == null ) deleteNodeClip  = (AudioClip)Resources.Load("tongueClick");
+      if( errorClip       == null ) errorClip       = (AudioClip)Resources.Load("tongueClick");
+
+
     }
 
     void ResetValues(){
 
       if(positions == null){
-      positions = new List<Vector3>();
-      rotations = new List<Quaternion>();
-      powers = new List<Vector3>();
-
-      positions.Add(transform.position);
-      rotations.Add(transform.rotation);
-      powers.Add(transform.localScale);
-
-      
-      positions.Add(transform.position + transform.forward);
-      rotations.Add(transform.rotation);
-      powers.Add(transform.localScale);
-
-      if(pointMatrices == null){
-        pointMatrices = new Matrix4x4[2];
-
+        positions = new List<Vector3>();
+        rotations = new List<Quaternion>();
+        powers = new List<Vector3>();
       }
+      
 
-      FullBake();
-      //FullBake();
+      if( positions.Count == 0 ){
+        positions.Add(transform.position);
+        rotations.Add(transform.rotation);
+        powers.Add(transform.localScale);
+
+        
+        positions.Add(transform.position + transform.forward);
+        rotations.Add(transform.rotation);
+        powers.Add(transform.localScale);
+
+        if(pointMatrices == null){
+          pointMatrices = new Matrix4x4[2];
+
+        }
+
+        FullBake();
+        //FullBake();
 
       }
 
@@ -160,9 +185,8 @@ public class Curve : MonoBehaviour
 
     }
     
-    public void AddPoint(int distID){
+    public void AddPoint(float v){
 
-      float v = bakedDists[distID];
      
 
       for( int i = 0; i < positions.Count; i++ ){
@@ -171,7 +195,7 @@ public class Curve : MonoBehaviour
         if( v > (float)i/((float)positions.Count-1)  && v <= ((float)i+1)/((float)positions.Count-1) ){
 
 
-          GetCubicInformation( v , out p , out d, out t , out w);
+          GetDataFromValueAlongCurve( v , out p , out d, out u ,out r, out w);
 
     
           positions.Insert(i+1, p);
@@ -204,6 +228,8 @@ public class Curve : MonoBehaviour
           ChangePowerY(i+1, pow2 );
           ChangePowerX(i+1, pow3 );
           ChangePowerY(i+2, pow4 );
+
+          FullBake();
         
           break;
         
@@ -225,8 +251,9 @@ public class Curve : MonoBehaviour
 
       float dist = length(positions[selectedPoint] - ray.origin);
       float3 newPos = ray.origin + ray.direction * dist;
-      Quaternion q = rotations[ selectedPoint ];
-      float3 power = powers[ selectedPoint ];
+      float3 dir = newPos - (float3)positions[selectedPoint];
+      Quaternion q = Quaternion.LookRotation( dir , rotations[selectedPoint] * float3(0,1,0));// rotations[ selectedPoint ];
+      float3 power = float3( length(dir) * .3f, length(dir) * .3f,powers[selectedPoint].z);
 
 
         positions.Insert(selectedPoint+1, newPos);
@@ -245,6 +272,16 @@ public class Curve : MonoBehaviour
 
     public void playClip(AudioClip clip ){
 
+      audioSource.pitch = 1;
+      audioSource.clip = clip;
+      audioSource.volume = audioVolume;
+      audioSource.Play();
+
+    }
+
+    public void playClip(AudioClip clip , float p ){
+
+      audioSource.pitch = p;
       audioSource.clip = clip;
       audioSource.volume = audioVolume;
       audioSource.Play();
@@ -681,14 +718,21 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
 
     public void GetDataFromValueAlongCurve( float v , out float3 pos , out float3 fwd , out float3 up , out float3 rit , out float scale){
       GetCubicInformation( getEvenDistAlong(v) , out pos , out fwd , out rit , out scale );
-      up = -cross( d,t);
+      up = -cross(fwd,rit);
     }
+
+
+    public void GetDataFromCurvePoint( float v , out float3 pos , out float3 fwd , out float3 up , out float3 rit , out float scale){
+      GetCubicInformation( v , out pos , out fwd , out rit , out scale );
+      up = -cross(fwd,rit);
+    }
+
 
 
     public void GetDataFromLengthAlongCurve( float v , out float3 pos , out float3 fwd , out float3 up , out float3 rit , out float scale){
       
       GetCubicInformation( getEvenDistAlong(v/totalCurveLength) , out pos , out fwd , out rit , out scale );
-      up = -cross( d,t);
+      up = -cross( fwd,rit);
     }
 
 
@@ -706,9 +750,6 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
 
 
 
-
-public CurveEvent BakeChanged = new CurveEvent();
-public CurveEvent CurveChanged = new CurveEvent();
 
 
 
