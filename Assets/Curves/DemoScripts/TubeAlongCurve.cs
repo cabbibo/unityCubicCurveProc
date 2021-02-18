@@ -10,13 +10,15 @@ using Unity.Mathematics;
 [ExecuteInEditMode]
 
 [RequireComponent(typeof(MeshFilter))]
+[RequireComponent(typeof(MeshRenderer))]
+[RequireComponent(typeof(Curve))]
 public class TubeAlongCurve : MonoBehaviour
 {
 
     public Curve curve;
-    public int lengthSegments;
-    public int radialSegments;
-    public float radius;
+    public int lengthSegments = 50;
+    public int radialSegments = 8;
+    public float radius = 1;
 
 
     Vector3[] positions;
@@ -32,7 +34,9 @@ public class TubeAlongCurve : MonoBehaviour
 
     public void OnEnable(){
         filter = GetComponent<MeshFilter>();
+        curve = GetComponent<Curve>();
         curve.BakeChanged.AddListener(BuildMesh);
+
     }
 
     public void OnDisable(){
@@ -89,15 +93,15 @@ public class TubeAlongCurve : MonoBehaviour
 
                 float xAmount = Mathf.Sin(angle);
                 float yAmount = Mathf.Cos(angle);
-
-                float3 fPos = curve.GetOffsetPositionFromValueAlongCurve( lengthAlongTube , xAmount , yAmount );
+                float w = curve.GetWidthFromValueAlongCurve(lengthAlongTube);
+                float3 fPos = curve.GetOffsetPositionFromValueAlongCurve( lengthAlongTube , xAmount*w*radius, yAmount*w*radius );
                 float3 normal = fPos - centerPos;
                 float4 tangent = float4(cross(normal,forward),1);
                 float2 uv = float2( lengthAlongTube, aroundness);
 
-                positions[index] = fPos;
-                tangents[index] = tangent;
-                normals[index] = normal;
+                positions[index] = transform.InverseTransformPoint(fPos);
+                tangents[index] = float4(transform.InverseTransformDirection(tangent.xyz),1);
+                normals[index] = transform.InverseTransformDirection(normal);
                 uvs[ index] = uv;
 
                 index++;

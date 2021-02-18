@@ -1,4 +1,4 @@
-using System.Collections;
+                                                                                     using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -18,8 +18,8 @@ public class Curve : MonoBehaviour
 
     public bool closed;
     public bool showCurve = true;
-    public bool showAddPositions=true;
-    public bool showEvenBasis;
+    public bool showAddPositions =true;
+    public bool showEvenBasis = true;
     public bool showEvenMovementBasis;
     public bool showCurveMovementBasis;
     public bool showPointArrows;
@@ -33,14 +33,15 @@ public class Curve : MonoBehaviour
     public float curveVizSpeed = .1f;
 
 
-    public bool showAllControls;
-    public bool showRotateControls;
-    public bool showScaleControls;
+    public bool showAllControls = false;
+    public bool showRotateControls = true;
+    public bool showScaleControls = true;
     public bool showMoveControls = true;
 
     public bool haveFun;
 
     public Font labelFont;
+
 
     [Range(.1f,2)]
     public float interfaceScale = 1;
@@ -50,6 +51,13 @@ public class Curve : MonoBehaviour
     public int curveVizLength = 200;
 
 
+
+
+    [Range(100,1000)]
+    public int bakingStepResolution = 100;
+
+    [Range(100,1000)]
+    public float bakingPrecision = 100;
   
     [Range(.1f,100)]
     public float stepLength = .3f;
@@ -88,12 +96,13 @@ public class Curve : MonoBehaviour
      public bool doAudio;
      public float audioVolume;
 
-     public AudioClip moveClip        = (AudioClip)Resources.Load("tongueClick");
-     public AudioClip scaleClip       = (AudioClip)Resources.Load("tongueClick");
-     public AudioClip rotateClip      = (AudioClip)Resources.Load("tongueClick");
-     public AudioClip addNodeClip     = (AudioClip)Resources.Load("tongueClick");
-     public AudioClip deleteNodeClip  = (AudioClip)Resources.Load("tongueClick");
-     public AudioClip errorClip       = (AudioClip)Resources.Load("tongueClick");
+     public AudioClip moveClip      ;
+     public AudioClip scaleClip     ;
+     public AudioClip rotateClip    ;
+     public AudioClip addNodeClip   ;
+     public AudioClip deleteNodeClip;
+     public AudioClip errorClip     ;
+     public AudioClip selectNodeClip;
 
      private AudioSource audioSource;
 
@@ -124,12 +133,14 @@ public class Curve : MonoBehaviour
       if( addNodeClip     == null ) addNodeClip     = (AudioClip)Resources.Load("tongueClick");
       if( deleteNodeClip  == null ) deleteNodeClip  = (AudioClip)Resources.Load("tongueClick");
       if( errorClip       == null ) errorClip       = (AudioClip)Resources.Load("tongueClick");
+      if( selectNodeClip  == null ) selectNodeClip  = (AudioClip)Resources.Load("tongueClick");
 
 
     }
 
     void ResetValues(){
 
+      oWorldMatrix = transform.worldToLocalMatrix;
       if(positions == null){
         positions = new List<Vector3>();
         rotations = new List<Quaternion>();
@@ -138,6 +149,8 @@ public class Curve : MonoBehaviour
       
 
       if( positions.Count == 0 ){
+
+        print("addingPoints");
         positions.Add(transform.position);
         rotations.Add(transform.rotation);
         powers.Add(transform.localScale);
@@ -149,6 +162,8 @@ public class Curve : MonoBehaviour
 
         if(pointMatrices == null){
           pointMatrices = new Matrix4x4[2];
+          pointMatrices[0].SetTRS( positions[0], rotations[0],powers[0]);
+          pointMatrices[1].SetTRS( positions[1], rotations[1],powers[1]);
 
         }
 
@@ -163,28 +178,39 @@ public class Curve : MonoBehaviour
 
     public void FullBake(){
       UpdateMatrices();
+      SetBakingParameters();
       ArcLengthParameterization(stepLength,stepResolution);
+      oStepLength = stepLength;
+      oStepResolution = stepResolution;
     }
     public void DeletePoint(){
 
-      if( positions.Count > 0 ){
+      if( positions.Count > 2 ){
+      
+        positions.Remove(positions[selectedPoint]);
+        rotations.Remove(rotations[selectedPoint]);
+        powers.Remove(powers[selectedPoint]);
 
-      positions.Remove(positions[selectedPoint]);
-      rotations.Remove(rotations[selectedPoint]);
-      powers.Remove(powers[selectedPoint]);
+        if( selectedPoint == positions.Count ){
+          selectedPoint -= 1;
+        }
 
-      if( selectedPoint == positions.Count ){
-        selectedPoint -= 1;
-      }
-
-     
         playClip( deleteNodeClip );
+      
       }else{
+      
         playClip( errorClip );
+      
       }
 
     }
     
+
+
+    public void SelectNode(int v){
+      selectedPoint = v;
+      playClip(selectNodeClip);
+    }
     public void AddPoint(float v){
 
      
@@ -301,6 +327,12 @@ public class Curve : MonoBehaviour
       }
     }
 
+
+    Matrix4x4 oWorldMatrix;
+    Transform oTransform;
+
+
+    Vector3 oScale;
     // Update is called once per frame
     void Update()
     {
@@ -309,9 +341,29 @@ public class Curve : MonoBehaviour
         FullBake();
       }
 
+      if( oWorldMatrix != transform.worldToLocalMatrix ){
+
+          for( int i = 0; i < powers.Count; i++ ){
+            powers[i] = transform.localScale *  ((1f/(float3)oScale) * powers[i]);//mul(transform.localToWorldMatrix,mul(oWorldMatrix ,float4(powers[i],0))).xyz; 
+          }
+
+
+          for( int i = 0; i < powers.Count; i++ ){
+            Matrix4x4 m = mul(transform.localToWorldMatrix,mul(oWorldMatrix ,pointMatrices[i])); 
+            positions[i] = float3(m[0,3], m[1,3], m[2,3]);
+            rotations[i] = m.rotation;
+          }
+
+          FullBake();
+      
+      }
+
       oStepLength = stepLength;
       oStepResolution = stepResolution;
 
+      oWorldMatrix = transform.worldToLocalMatrix;
+      oTransform = transform;
+      oScale = transform.localScale;
     }
 
 
@@ -735,6 +787,37 @@ float3 cubicCurve( float t , float3  c0 , float3 c1 , float3 c2 , float3 c3 ){
       up = -cross( fwd,rit);
     }
 
+
+    public float GetCurveEstimatedLength(){
+
+      float totalLength = 0;
+      int count = positions.Count -1; 
+      if( closed ){ count ++; }
+      for(int i = 0; i< count; i++ ){
+        totalLength += GetSectionEstimatedLength(i);
+      }
+
+      return totalLength;
+
+    }
+    public float GetSectionEstimatedLength(int id){
+      float3 p1 = positions[id];
+      float3 p2 = positions[id] + rotations[id] * float3(0,0,1) * powers[id].x;
+      int idUp = (id + 1) % positions.Count;
+      float3 p3 = positions[idUp] - rotations[idUp] * float3(0,0,1) * powers[id].y;
+      float3 p4 = positions[idUp];
+
+      return length(p2-p1) + length( p3-p2) + length( p4-p3);
+
+    }
+
+    public void SetBakingParameters(){
+      float length = GetCurveEstimatedLength();
+
+        stepLength = length / (float)bakingStepResolution;
+        stepResolution = stepLength / bakingPrecision;
+
+    }
 
     public ComputeBuffer GetEvenPointTransformBuffer(){
 

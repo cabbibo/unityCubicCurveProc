@@ -152,7 +152,7 @@ public class CurveEditor : Editor
 
     void Draw(){
 
-
+        if( curve ){
         if( curve.enabled  ){
         Quaternion lookAtCam = Quaternion.LookRotation( Camera.current.transform.forward, Camera.current.transform.up );
 
@@ -188,7 +188,7 @@ public class CurveEditor : Editor
 
             if( curve.showBakedPoints ){
                 for( int i = 0; i < curve.bakedPoints.Length; i++){
-                    c = Color.HSVToRGB((((float)i/(float)curve.bakedPoints.Length) + curvePosition*2)%1,.5f,1f);
+                    c = Color.HSVToRGB((((float)i/(float)curve.bakedPoints.Length))%1,.5f,1f);
                     Handles.color = c;
                     Handles.DrawWireCube(curve.bakedPoints[i], Vector3.one * GetSize(curve.bakedPoints[i], .05f) );
                 }
@@ -263,9 +263,68 @@ public class CurveEditor : Editor
 
             //Transform t = curve.positions[i];
 
-            
-    
 
+/*
+
+    Select Controls
+
+*/ 
+            
+       
+            if( i != curve.selectedPoint && curve.showAllControls != true ){
+                Handles.color = Color.HSVToRGB(.3f,.3f,1);//,.5f,1);
+                bool hit = Handles.Button( pos , lookAtCam , GetSize( pos , .65f ) , GetSize( pos , .65f ) ,  Handles.CircleCap );
+                
+                if( hit ){ 
+                    Undo.RecordObject(curve,"Select New Point");
+                    curve.SelectNode(i);
+                    hasChanged = true;
+                }
+            }
+
+            
+         
+            if(i == curve.selectedPoint ){
+                // draw it but can't hit 
+                Handles.color = Color.HSVToRGB(.9f,1,1);//,.5f,1);
+                //bool    hit = Handles.Button( pos , lookAtCam , GetSize( pos , 2f ) ,0 ,  Handles.CircleCap );
+                        //hit = Handles.Button( pos , lookAtCam , GetSize( pos , .62f ) ,0 ,  Handles.CircleCap );
+                        //hit = Handles.Button( pos , lookAtCam , GetSize( pos , .85f ) ,0 ,  Handles.CircleCap );
+            }
+         
+
+
+         /*
+
+            Move Controls
+
+         */ 
+   if( (i == curve.selectedPoint || curve.showAllControls ) && curve.showMoveControls){
+                Handles.color = Color.HSVToRGB(.6f,0.5f,1);
+                newPos = Handles.FreeMoveHandle( pos ,  rot,GetSize(pos , .3f) , Vector3.zero ,  Handles.CircleHandleCap );
+                
+                if( newPos != pos ){
+                    Undo.RecordObject(curve,"Move");
+                    curve.positions[i] = newPos;
+                    hasChanged = true;
+                    curve.selectedPoint=i;
+                    moveDelta += length(newPos - pos) / GetSize(pos , 1);
+
+                    currentMovePoint = newPos;
+                    if( isMoving == false ){
+                        startMovePoint = newPos;
+                    }
+
+                    isMoving = true;
+                }
+
+
+                if( isMoving){
+                    Handles.DrawDottedLine(startMovePoint,currentMovePoint, length(startMovePoint-currentMovePoint)/4);
+                    Handles.DrawSolidDisc( startMovePoint , currentMovePoint-startMovePoint , GetSize(startMovePoint,.1f));
+                }
+                    
+            }     
                 
 
 
@@ -348,11 +407,19 @@ public class CurveEditor : Editor
                 
                 
                 fPos1 = pos + forward * outSize;
-                fPos2 = pos + forward * (outSize + curve.powers[i].x * size);
+                fPos2 = pos + forward * (outSize + curve.powers[i].x );
+                float handleSize = GetSize( fPos2,.1f);
                 
-                newPos = Handles.FreeMoveHandle(fPos2, Quaternion.identity, size, Vector3.zero, Handles.CircleHandleCap);
+                newPos = Handles.FreeMoveHandle(fPos2, Quaternion.identity, handleSize, Vector3.zero, Handles.CircleHandleCap);
                 dir = (fPos2 -pos);
                 Handles.DrawLine(fPos2 , fPos1);
+
+
+                Handles.DrawPolyLine( new []{ 
+                    fPos2 + handleSize *forward * 2 - right * outSize * .1f , 
+                    fPos2 + handleSize *forward * 2 +  forward * outSize * .1f , 
+                    fPos2 + handleSize *forward * 2 + right * outSize * .1f 
+                });
              
                 if( newPos != fPos2 ){      
                     currentScale = fPos2;
@@ -362,7 +429,7 @@ public class CurveEditor : Editor
                     }
                     scaleDelta += length(newPos - fPos2) / GetSize(pos , 1);
                     Undo.RecordObject(curve,"Change Power");
-                    curve.ChangePowerX( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude / size);
+                    curve.ChangePowerX( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude );
                     hasChanged = true;
                     curve.selectedPoint=i;
                 }
@@ -370,11 +437,16 @@ public class CurveEditor : Editor
 
 
                 fPos1 = pos - forward * outSize;
-                fPos2 = pos - forward * (outSize + curve.powers[i].y * size);
+                fPos2 = pos - forward * (outSize + curve.powers[i].y);
                 
-                newPos = Handles.FreeMoveHandle(fPos2, Quaternion.identity, size, Vector3.zero, Handles.CircleHandleCap);
+               handleSize = GetSize( fPos2,.1f);
+                newPos = Handles.FreeMoveHandle(fPos2, Quaternion.identity, handleSize, Vector3.zero, Handles.CircleHandleCap);
                 dir = (fPos2 -pos);
                 Handles.DrawLine(fPos2 , fPos1);
+                    Handles.DrawPolyLine( new []{ 
+                    fPos2 - handleSize *forward * 2 - right * outSize * .1f , 
+                    fPos2 - handleSize *forward * 2 + right * outSize * .1f 
+                });
              
                 if( newPos != fPos2 ){      
                     currentScale = fPos2;
@@ -384,7 +456,7 @@ public class CurveEditor : Editor
                     }
                     scaleDelta += length(newPos - fPos2) / GetSize(pos , 1);
                     Undo.RecordObject(curve,"Change Power");
-                    curve.ChangePowerY( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude / size);
+                    curve.ChangePowerY( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude);
                     hasChanged = true;
                     curve.selectedPoint=i;
                 }
@@ -393,12 +465,21 @@ public class CurveEditor : Editor
                 Handles.color = Color.HSVToRGB(.5f,.5f,1);
 
                 fPos1 = pos + right * outSize;
-                fPos2 = pos + right * (outSize + curve.powers[i].z * size);
+                fPos2 = pos + right * (outSize + curve.powers[i].z);
                 
-                newPos = Handles.FreeMoveHandle(fPos2, Quaternion.identity, size, Vector3.zero, Handles.CircleHandleCap);
+               handleSize = GetSize( fPos2,.1f);
+                newPos = Handles.FreeMoveHandle(fPos2, Quaternion.identity, handleSize, Vector3.zero, Handles.CircleHandleCap);
                 dir = (fPos2 -pos);
                 Handles.DrawLine(fPos2 , fPos1);
+                Handles.DrawLine(fPos2 , fPos1);
+                    Handles.DrawPolyLine( new []{ 
+                    fPos2 + handleSize *right * 2 - forward * outSize * .1f , 
+                    
+                    fPos2 + handleSize *right * 2 +  right * outSize * .1f , 
+                    fPos2 + handleSize *right * 2 + forward * outSize * .1f 
+                });
              
+            
                 if( newPos != fPos2 ){
                       currentScale = fPos2;
                     if( isScaling == false ){
@@ -407,17 +488,23 @@ public class CurveEditor : Editor
                     }
                     scaleDelta += length(newPos - fPos2) / GetSize(pos , 1);
                     Undo.RecordObject(curve,"Change Power");
-                    curve.ChangePowerZ( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude / size);
+                    curve.ChangePowerZ( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude);
                     hasChanged = true;
                     curve.selectedPoint=i;
                 }
 
                 fPos1 = pos - right * outSize;
-                fPos2 = pos - right * (outSize + curve.powers[i].z * size);
+                fPos2 = pos - right * (outSize + curve.powers[i].z);
                 
-                newPos = Handles.FreeMoveHandle(fPos2, Quaternion.identity, size, Vector3.zero, Handles.CircleHandleCap);
+                handleSize = GetSize( fPos2,.1f);
+                newPos = Handles.FreeMoveHandle(fPos2, Quaternion.identity, handleSize, Vector3.zero, Handles.CircleHandleCap);
                 dir = (fPos2 -pos);
                 Handles.DrawLine(fPos2 , fPos1);
+                   Handles.DrawLine(fPos2 , fPos1);
+                    Handles.DrawPolyLine( new []{ 
+                    fPos2 - handleSize *right * 2 - forward * outSize * .1f , 
+                    fPos2 - handleSize *right * 2 + forward * outSize * .1f 
+                });
              
                 if( newPos != fPos2 ){
                     
@@ -430,13 +517,19 @@ public class CurveEditor : Editor
                     
                     scaleDelta += length(newPos - fPos2) / GetSize(pos , 1);
                     Undo.RecordObject(curve,"Change Power");
-                    curve.ChangePowerZ( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude / size);
+                    curve.ChangePowerZ( i,  Mathf.Clamp( dot( newPos - fPos1 , dir ) , 0 , 1) * (newPos - fPos1).magnitude);
                     hasChanged = true;
                     curve.selectedPoint=i;
                 }
 
 
-
+                
+                Handles.color = Color.HSVToRGB(.2f,.5f,1);
+                Handles.DrawPolyLine( new []{ 
+                    pos + up * outSize + handleSize * up * 2 - forward * outSize * .1f , 
+                    pos + up * outSize + handleSize * up * 2 +  up * outSize * .1f , 
+                    pos + up * outSize + handleSize * up * 2 + forward * outSize * .1f 
+                });
 
                    if( isScaling){
                 Handles.color = Color.HSVToRGB(.4f,0,1);
@@ -462,60 +555,15 @@ public class CurveEditor : Editor
 
 
 
-   
-            if( i != curve.selectedPoint && curve.showAllControls != true ){
-                Handles.color = Color.HSVToRGB(.3f,.3f,1);//,.5f,1);
-                bool hit = Handles.Button( pos , lookAtCam , GetSize( pos , .65f ) , GetSize( pos , .65f ) ,  Handles.CircleCap );
+
+
+
+
+
+
+
+
                 
-                if( hit ){ 
-                    Undo.RecordObject(curve,"Select New Point");
-                    curve.selectedPoint = i;
-                    hasChanged = true;
-                }
-            }
-            
-         
-            if(i == curve.selectedPoint ){
-                // draw it but can't hit 
-                Handles.color = Color.HSVToRGB(.9f,1,1);//,.5f,1);
-                //bool    hit = Handles.Button( pos , lookAtCam , GetSize( pos , 2f ) ,0 ,  Handles.CircleCap );
-                        //hit = Handles.Button( pos , lookAtCam , GetSize( pos , .62f ) ,0 ,  Handles.CircleCap );
-                        //hit = Handles.Button( pos , lookAtCam , GetSize( pos , .85f ) ,0 ,  Handles.CircleCap );
-            }
-         
-
-
-
-
-
-
-
-            if( (i == curve.selectedPoint || curve.showAllControls ) && curve.showMoveControls){
-                Handles.color = Color.HSVToRGB(.6f,0.5f,1);
-                newPos = Handles.FreeMoveHandle( pos ,  rot,GetSize(pos , .3f) , Vector3.zero ,  Handles.CircleHandleCap );
-                
-                if( newPos != pos ){
-                    Undo.RecordObject(curve,"Move");
-                    curve.positions[i] = newPos;
-                    hasChanged = true;
-                    curve.selectedPoint=i;
-                    moveDelta += length(newPos - pos) / GetSize(pos , 1);
-
-                    currentMovePoint = newPos;
-                    if( isMoving == false ){
-                        startMovePoint = newPos;
-                    }
-
-                    isMoving = true;
-                }
-
-
-                if( isMoving){
-                    Handles.DrawDottedLine(startMovePoint,currentMovePoint, length(startMovePoint-currentMovePoint)/4);
-                    Handles.DrawSolidDisc( startMovePoint , currentMovePoint-startMovePoint , GetSize(startMovePoint,.1f));
-                }
-                    
-            }            
 
             if( curve.showPointArrows ){
             // Arrows
@@ -641,7 +689,7 @@ Movement
 
 
 
-        }
+        }}
 
     }
 

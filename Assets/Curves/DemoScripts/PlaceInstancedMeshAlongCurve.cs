@@ -12,6 +12,8 @@ using MagicCurve;
 [ExecuteInEditMode]
 
 [RequireComponent(typeof(MeshFilter))]
+[RequireComponent(typeof(MeshRenderer))]
+[RequireComponent(typeof(Curve))]
 public class PlaceInstancedMeshAlongCurve : MonoBehaviour
 {
 
@@ -27,6 +29,7 @@ public class PlaceInstancedMeshAlongCurve : MonoBehaviour
 
     public void OnEnable(){
         filter = GetComponent<MeshFilter>();
+        curve = GetComponent<Curve>();
         curve.BakeChanged.AddListener(BuildMesh);
         BuildMesh(curve);
     }
@@ -48,7 +51,7 @@ public class PlaceInstancedMeshAlongCurve : MonoBehaviour
 
             curve.GetDataFromValueAlongCurve(val,out p,out f,out u,out r,out s);
 
-            combine[i].transform = Matrix4x4.TRS( p + f * offset.z + u * offset.y + r * offset.z, Quaternion.LookRotation( f,u) , Vector3.one * s * scaleMultiplier);
+            combine[i].transform = transform.worldToLocalMatrix * Matrix4x4.TRS( p + f * offset.z + u * offset.y + r * offset.z, Quaternion.LookRotation( f,u) , Vector3.one * s * scaleMultiplier);
             combine[i].mesh = mesh;
 
 
